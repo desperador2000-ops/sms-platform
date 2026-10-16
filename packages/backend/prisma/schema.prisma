@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProviderName {
+  TWILIO
+  VONAGE
+  TELNYX
+  AFRICASTALKING
+}
+
+enum NumberType {
+  MOBILE
+  LOCAL
+  TOLL_FREE
+}
+
+model User {
+  id                  String            @id @default(uuid())
+  email               String            @unique
+  emailVerified       Boolean           @default(false)
+  passwordHash        String
+  totpSecret          String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  isAdmin             Boolean           @default(false)
+  stripeCustomerId    String?
+  locale              String            @default("fr")
+  retentionDays       Int               @default(30)
+  acceptedTermsAt     DateTime?
+  acceptedPrivacyAt   DateTime?
+  consentMarketing    Boolean           @default(false)
+  deletedAt           DateTime?
+  suspendedAt         DateTime?
+  suspensionReason    String?
+
+  apiKeys             ApiKey[]
+  numbers             Number[]
+  messages            Message[]
+  auditLogs           AuditLog[]
+  sessions            RefreshToken[]
+  kycDocuments        KycDocument[]
+  billingSub          Subscription?
+  consentRecords      ConsentRecord[]
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  revoked     Boolean  @default(false)
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model Number {
+  id             String      @id @default(uuid())
+  e164           String      @unique
+  countryCode    String
+  region         String?
+  type           NumberType
+  provider       Provider    @relation(fields: [providerId], references: [id])
+  providerId     String
+  purchasePrice  Decimal     @db.Decimal(12,6)
+  monthlyPrice   Decimal     @db.Decimal(12,6)
+  capabilities   Json
+  webhookUrl     String?
+  webhookAuth    String?
+  user           User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId         String?
+  createdAt      DateTime    @default(now())
+  releasedAt     DateTime?
+  status         String      @default("active")
+  providerNumberId String?
+  providerRaw    Json?
+  messages       Message[]
+  kycSubmission  KycSubmission?
+}
