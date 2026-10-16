@@ -93,3 +93,149 @@ model Number {
   messages       Message[]
   kycSubmission  KycSubmission?
 }
+
+model Provider {
+  id         String           @id @default(uuid())
+  name       ProviderName
+  apiConfig  Json
+  countries  ProviderCountry[]
+  numbers    Number[]
+  createdAt  DateTime         @default(now())
+}
+
+model ProviderCountry {
+  id                String   @id @default(uuid())
+  provider          Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId        String
+  countryCode       String
+  available         Boolean  @default(true)
+  smsEnabled        Boolean  @default(true)
+  pricePerMessage   Decimal  @db.Decimal(12,6)
+}
+
+model Message {
+  id                String    @id @default(uuid())
+  messageId         String?   @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  number            Number?   @relation(fields: [numberId], references: [id], onDelete: SetNull)
+  numberId          String?
+  from              String
+  to                String
+  encoding         String
+  length           Int
+  parts            Int
+  receivedAt       DateTime  @default(now())
+  status           String    @default("received")
+  contentCiphertext Bytes
+  contentIv        Bytes
+  contentTag       Bytes?
+  language         String?
+  detectedCode     String?
+  providerName     ProviderName
+  providerRaw      Json
+  webhookDelivered Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  processedAt      DateTime?
+}
+
+model OutboundWebhook {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  url       String
+  secret    String
+  events    String[]
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      String?
+  action      String
+  ip          String?
+  meta        Json?
+  createdAt   DateTime  @default(now())
+}
+
+model KycDocument {
+  id                   String   @id @default(uuid())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               String
+  filename             String
+  contentType          String
+  storagePath          String
+  status               String   @default("pending")
+  submittedAt          DateTime @default(now())
+  reviewedAt           DateTime?
+  providerSubmissionId String?
+}
+
+model KycSubmission {
+  id          String   @id @default(uuid())
+  number      Number   @relation(fields: [numberId], references: [id], onDelete: Cascade)
+  numberId    String   @unique
+  status      String   @default("pending")
+  details     Json?
+  submittedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CountryRequirement {
+  id                 String        @id @default(uuid())
+  countryCode        String
+  providerName       ProviderName
+  documentsRequired  String[]
+  notes              String?
+  updatedAt          DateTime      @updatedAt
+}
+
+model Subscription {
+  id                  String   @id @default(uuid())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String   @unique
+  plan                String
+  currency            String
+  amount              Decimal  @db.Decimal(12,2)
+  status              String
+  stripeSubscriptionId String?
+  flutterwaveData     Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Invoice {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  provider  String
+  amount    Decimal  @db.Decimal(12,2)
+  currency  String
+  pdfPath   String?
+  invoiceAt DateTime @default(now())
+}
+
+model ConsentRecord {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  consentType String
+  accepted    Boolean  @default(false)
+  version     String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+}
+
+model OtpChallenge {
+  id          String   @id @default(uuid())
+  phone       String
+  purpose     String   @default("auth")
+  codeHash    String?
+  attempts    Int      @default(0)
+  lockedUntil DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
