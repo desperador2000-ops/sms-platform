@@ -1,69 +1,32 @@
-import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from './config/configuration';
-import { PrismaService } from './prisma/prisma.service';
-import { setupSwagger } from './swagger/swagger.config';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import * as express from 'express';
 
 async function bootstrap() {
-  const config = ConfigService.loadAndValidate();
+  const logger = new Logger('Bootstrap');
 
-  const app = await NestFactory.create(AppModule.forRoot(config), {
-    logger: ['log', 'error', 'warn', 'debug', 'verbose']
-  });
+  const app = await NestFactory.create(AppModule.forRoot(), { bodyParser: true });
 
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
-          styleSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:']
-        }
-      },
-      crossOriginEmbedderPolicy: false
-    })
-  );
+  // Enable CORS (allow frontend origin if set)
+  const frontendOrigin = process.env.FRONTEND_ORIGIN || '*';
+  app.enableCors({ origin: frontendOrigin, methods: ['GET','POST','PUT','DELETE','OPTIONS'], credentials: true });
 
-  app.enableCors({
-    origin: config.FRONTEND_ORIGIN,
-    credentials: true
-  });
+  // Ensure urlencoded parser is configured so webhooks work
+  const server = app.getHttpAdapter().getInstance() as express.Express;
+  server.use(express.urlencoded({ extended: true }));
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true
-    })
-  );
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-    next();
-  });
+  const port = Number(process.env.PORT) || 4000;
+  const host = process.env.HOST || '0.0.0.0';
 
-  setupSwagger(app);
-
-  const prismaService = app.get(PrismaService);
-  await prismaService.enableShutdownHooks(app);
-
-  const port = config.PORT ?? 4000;
-  await app.listen(port);
-  console.log(`Backend running on port ${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/docs`);
-  console.log(`Health: http://localhost:${port}/health`);
+  await app.listen(port, host);
+  logger.log(`Application listening on: http://${host}:${port}`);
 }
 
 bootstrap().catch((err) => {
+  // eslint-disable-next-line no-console
   console.error('Fatal error during bootstrap', err);
   process.exit(1);
 });
